@@ -1,0 +1,4 @@
+@quotesFeedUrl = http://localhost:5040
+
+###
+GET {{quotesFeedUrl}}
