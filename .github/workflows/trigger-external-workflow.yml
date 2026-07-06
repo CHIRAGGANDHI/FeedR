@@ -1,0 +1,152 @@
+name: Trigger External Workflow with Commit Details
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - "**/bin/**"
+      - "**/obj/**"
+      - ".git/**"
+      - ".gitignore"
+      - ".github/**"
+      - ".vscode/**"
+      - ".vs/**"
+      - "node_modules/**"
+      - "**.lock"
+      - "**.md"
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: "Target repository (owner/repo)"
+        required: true
+        default: "your-org/target-repo"
+      target_workflow:
+        description: "Target workflow file name"
+        required: true
+        default: "receive-commit-details.yml"
+
+jobs:
+  trigger-external:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get commit details
+        id: commit
+        run: |
+          COMMIT_SHA=${{ github.sha }}
+          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          COMMIT_AUTHOR=$(git log -1 --pretty=%an)
+          COMMIT_EMAIL=$(git log -1 --pretty=%ae)
+          COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+
+          # Output for use in next steps
+          echo "sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "message=${COMMIT_MESSAGE}" >> $GITHUB_OUTPUT
+          echo "author=$COMMIT_AUTHOR" >> $GITHUB_OUTPUT
+          echo "email=$COMMIT_EMAIL" >> $GITHUB_OUTPUT
+          echo "url=$COMMIT_URL" >> $GITHUB_OUTPUT
+          echo "repo=${{ github.repository }}" >> $GITHUB_OUTPUT
+          echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
+          echo "Commit Details:"
+          echo "SHA: $COMMIT_SHA"
+          echo "Message: $COMMIT_MESSAGE"
+          echo "Author: $COMMIT_AUTHOR"
+          echo "URL: $COMMIT_URL"
+
+      - name: Trigger workflow in external repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
+          TARGET_REPO: ${{ inputs.target_repo || 'your-org/target-repo' }}
+          TARGET_WORKFLOW: ${{ inputs.target_workflow || 'receive-commit-details.yml' }}
+        run: |
+          # Parse target repository
+          IFS='/' read -r OWNER REPO <<< "$TARGET_REPO"
+
+          echo "Triggering workflow: $TARGET_WORKFLOW"
+          echo "Target repo: $TARGET_REPO"
+          echo "Owner: $OWNER"
+          echo "Repo: $REPO"
+
+          # Create JSON payload for workflow dispatch
+          PAYLOAD=$(cat <<EOF
+          {
+            "ref": "main",
+            "inputs": {
+              "commit_sha": "${{ steps.commit.outputs.sha }}",
+              "commit_message": "${{ steps.commit.outputs.message }}",
+              "commit_author": "${{ steps.commit.outputs.author }}",
+              "commit_email": "${{ steps.commit.outputs.email }}",
+              "commit_url": "${{ steps.commit.outputs.url }}",
+              "source_repo": "${{ steps.commit.outputs.repo }}",
+              "source_branch": "${{ steps.commit.outputs.branch }}"
+            }
+          }
+          EOF
+          )
+
+          echo "Payload:"
+          echo "$PAYLOAD" | jq .
+
+          # Trigger workflow dispatch
+          RESPONSE=$(curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/${TARGET_WORKFLOW}/dispatches \
+            -d "$PAYLOAD")
+
+          echo "Response:"
+          echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
+
+          # Check if request was successful (no content response = success)
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/${TARGET_WORKFLOW}/dispatches \
+            -d "$PAYLOAD")
+
+          if [ "$HTTP_STATUS" -eq 204 ]; then
+            echo "✓ Workflow triggered successfully"
+            exit 0
+          else
+            echo "✗ Failed to trigger workflow. HTTP Status: $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Alternative - Send via Repository Dispatch
+        # Uncomment to use repository_dispatch instead of workflow_dispatch
+        # env:
+        #   GITHUB_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
+        #   TARGET_REPO: ${{ inputs.target_repo || 'your-org/target-repo' }}
+        # run: |
+        #   IFS='/' read -r OWNER REPO <<< "$TARGET_REPO"
+        #
+        #   PAYLOAD=$(cat <<EOF
+        #   {
+        #     "event_type": "commit-received",
+        #     "client_payload": {
+        #       "commit_sha": "${{ steps.commit.outputs.sha }}",
+        #       "commit_message": "${{ steps.commit.outputs.message }}",
+        #       "commit_author": "${{ steps.commit.outputs.author }}",
+        #       "commit_email": "${{ steps.commit.outputs.email }}",
+        #       "commit_url": "${{ steps.commit.outputs.url }}",
+        #       "source_repo": "${{ steps.commit.outputs.repo }}",
+        #       "source_branch": "${{ steps.commit.outputs.branch }}"
+        #     }
+        #   }
+        #   EOF
+        #   )
+        #
+        #   curl -X POST \
+        #     -H "Accept: application/vnd.github.v3+json" \
+        #     -H "Authorization: token $GITHUB_TOKEN" \
+        #     https://api.github.com/repos/${OWNER}/${REPO}/dispatches \
+        #     -d "$PAYLOAD"
+        #
+        #   echo "✓ Repository dispatch event sent"
