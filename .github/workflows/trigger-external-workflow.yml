@@ -120,6 +120,15 @@ jobs:
           fi
 
       - name: Alternative - Send via Repository Dispatch
+        # This step is a commented example for repository_dispatch. It
+        # previously had no `run` or `uses` property which breaks YAML
+        # validation. Keep the example below and a harmless stub `run`
+        # so the workflow remains valid. Uncomment and replace the stub
+        # when you want to enable repository dispatch.
+        run: |
+          echo "Repository dispatch example is disabled."
+          echo "Uncomment and enable the block in this file to use it."
+
         # Uncomment to use repository_dispatch instead of workflow_dispatch
         # env:
         #   GITHUB_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
