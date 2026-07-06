@@ -17,19 +17,13 @@ on:
       - "**.lock"
       - "**.md"
   workflow_dispatch:
-    inputs:
-      target_repo:
-        description: "Target repository (owner/repo)"
-        required: true
-        default: "CHIRAGGANDHI/FeedR"
-      target_workflow:
-        description: "Target workflow file name"
-        required: true
-        default: "receive-commit-details.yml"
 
 jobs:
   trigger-external:
     runs-on: ubuntu-latest
+    env:
+      TARGET_REPO: "CHIRAGGANDHI/FeedR"
+      TARGET_WORKFLOW: "receive-commit-details.yml"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -63,8 +57,6 @@ jobs:
       - name: Trigger workflow in external repository
         env:
           GITHUB_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
-          TARGET_REPO: ${{ inputs.target_repo || 'your-org/target-repo' }}
-          TARGET_WORKFLOW: ${{ inputs.target_workflow || 'receive-commit-details.yml' }}
         run: |
           # Parse target repository
           IFS='/' read -r OWNER REPO <<< "$TARGET_REPO"
