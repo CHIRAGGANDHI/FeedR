@@ -21,7 +21,7 @@ on:
       target_repo:
         description: "Target repository (owner/repo)"
         required: true
-        default: "your-org/target-repo"
+        default: "CHIRAGGANDHI/FeedR"
       target_workflow:
         description: "Target workflow file name"
         required: true
