@@ -24,7 +24,7 @@ builder.Services
     
 var app = builder.Build();
 
-app.MapGet("/", () => "FeedR Gateway");
+app.MapGet("/", () => "FeedR Gateway Workflow Testing");
 app.MapReverseProxy();
 
 app.Run();
